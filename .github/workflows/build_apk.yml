@@ -14,18 +14,20 @@ jobs:
 
     steps:
       # 1. Récupération du code
-      - name: Récupération du code
+      - name: Récupération du code source
         uses: actions/checkout@v4
 
-      # 2. Configuration de Node.js (sans cache: npm pour éviter l'erreur de lockfile)
+      # 2. Configuration de Node.js
       - name: Configuration de Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 3. Installation des dépendances avec --legacy-peer-deps
-      - name: Installation des dépendances npm
-        run: npm install --legacy-peer-deps
+      # 3. Installation des dépendances et de Capacitor
+      - name: Installation des dépendances et de Capacitor
+        run: |
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
 
       # 4. Compilation du frontend Web
       - name: Compilation du frontend Web
@@ -38,23 +40,24 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 6. Initialisation et synchronisation Android avec Capacitor
-      - name: Initialisation et synchronisation Android
+      # 6. Initialisation et synchronisation Android (avec nom complet @capacitor/cli)
+      - name: Initialisation du projet Android Capacitor
         run: |
-          npx cap add android || true
-          npx cap sync android
+          npx @capacitor/cli init "Adhan" "com.adhan.algeria.app" --web-dir dist || true
+          npx @capacitor/cli add android || true
+          npx @capacitor/cli sync android
 
       # 7. Permissions d'exécution Gradle
       - name: Permissions d'exécution Gradle
         run: chmod +x android/gradlew
 
-      # 8. Compilation de l'APK (assembleDebug = prêt à installer directement sur tout smartphone)
-      - name: Compilation de l'APK Android
+      # 8. Compilation de l'APK (Debug installable sur tout téléphone)
+      - name: Compilation de l'APK Android (Debug installable)
         run: |
           cd android
           ./gradlew assembleDebug
 
-      # 9. Préparation du fichier final
+      # 9. Préparation de l'APK
       - name: Préparation de l'APK
         run: |
           mkdir -p apk_output
