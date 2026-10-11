@@ -1,0 +1,50 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Permet de lancer la compilation manuellement en 1 clic
+
+jobs:
+  build:
+    name: Compilation de l'APK Android
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Récupération du code source
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      # 2. Configuration de Java 17
+      - name: Configuration de Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      # 3. Installation de Flutter
+      - name: Configuration de Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
+      # 4. Téléchargement des dépendances
+      - name: Installer les dépendances
+        run: flutter pub get
+
+      # 5. Compilation du fichier APK en mode Release
+      - name: Compiler l'APK
+        run: flutter build apk --release --split-per-abi
+
+      # 6. Mettre à disposition le fichier APK en téléchargement
+      - name: Télécharger l'artéfact APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Adhan-Algeria-APK
+          path: build/app/outputs/flutter-apk/*.apk
+          retention-days: 14
