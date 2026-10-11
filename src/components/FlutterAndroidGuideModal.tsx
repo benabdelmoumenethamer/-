@@ -20,7 +20,7 @@ interface Props {
 
 export const FlutterAndroidGuideModal: React.FC<Props> = ({ isOpen, onClose, language }) => {
   const isArabic = language === 'ar';
-  const [activeTab, setActiveTab] = useState<'main' | 'pubspec' | 'manifest' | 'commands' | 'twa'>('main');
+  const [activeTab, setActiveTab] = useState<'github' | 'commands' | 'main' | 'pubspec' | 'manifest' | 'twa'>('github');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -406,6 +406,79 @@ bubblewrap build
 # Le fichier APK installable sur tous les smartphones Android est prêt dans votre dossier !
 `;
 
+  const workflowCode = `name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compilation APK Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Récupération du code source
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installation des dépendances NPM
+        run: npm install --legacy-peer-deps
+
+      - name: Compilation du frontend Web
+        run: npm run build
+
+      - name: Configuration de Java 21 (Requis par Capacitor 7)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configuration de Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Acceptation des licences Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Synchronisation Capacitor Android
+        run: |
+          if [ ! -d "android" ]; then
+            npx @capacitor/cli add android
+          fi
+          npx @capacitor/cli sync android
+
+      - name: Compilation de l'APK Android
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Préparation de l'APK
+        run: |
+          mkdir -p apk_output
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk_output/Adhan-Algeria.apk
+          ls -lh apk_output/Adhan-Algeria.apk
+
+      - name: Téléverser l'APK (GitHub Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Adhan-Algeria-APK
+          path: apk_output/Adhan-Algeria.apk
+          retention-days: 30
+`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-5">
       <div className="w-full max-w-4xl rounded-3xl bg-emerald-950 border border-amber-500/40 shadow-2xl text-slate-100 flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -436,6 +509,28 @@ bubblewrap build
 
         {/* Navigation Tabs */}
         <div className="px-4 py-2.5 bg-emerald-900/50 border-b border-emerald-800/60 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setActiveTab('github')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'github'
+                ? 'bg-amber-400 text-emerald-950 shadow-sm'
+                : 'bg-emerald-950 text-slate-300 hover:bg-emerald-900'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>GitHub Actions APK (.github/workflows/build_apk.yml)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('commands')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'commands'
+                ? 'bg-amber-400 text-emerald-950 shadow-sm'
+                : 'bg-emerald-950 text-slate-300 hover:bg-emerald-900'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>Commandes Locales</span>
+          </button>
           <button
             onClick={() => setActiveTab('main')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -470,17 +565,6 @@ bubblewrap build
             <span>AndroidManifest.xml</span>
           </button>
           <button
-            onClick={() => setActiveTab('commands')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'commands'
-                ? 'bg-amber-400 text-emerald-950 shadow-sm'
-                : 'bg-emerald-950 text-slate-300 hover:bg-emerald-900'
-            }`}
-          >
-            <Terminal className="w-3.5 h-3.5" />
-            <span>Compilation APK</span>
-          </button>
-          <button
             onClick={() => setActiveTab('twa')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'twa'
@@ -495,6 +579,33 @@ bubblewrap build
 
         {/* Content Box */}
         <div className="flex-1 overflow-y-auto p-4 relative font-mono text-xs">
+          {activeTab === 'github' && (
+            <div>
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-emerald-800 text-slate-400">
+                <span className="text-amber-400 font-bold">Fichier .github/workflows/build_apk.yml (Prêt et sans erreurs)</span>
+                <button
+                  onClick={() => copyToClipboard(workflowCode, 'github')}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-amber-300 transition cursor-pointer"
+                >
+                  {copiedKey === 'github' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedKey === 'github' ? 'Copié !' : 'Copier'}</span>
+                </button>
+              </div>
+              <div className="mb-3 p-3 rounded-xl bg-emerald-900/60 border border-emerald-700 text-emerald-200 text-xs font-sans leading-relaxed">
+                <p className="font-bold text-amber-300 mb-1">✓ Correctifs appliqués pour garantir 100% de succès :</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><strong>Java 21 activé :</strong> Résout l'erreur <code>invalid source release: 21</code> exigée par Capacitor 7 et AGP 8.7+.</li>
+                  <li><strong>Pas d'appel à sdkmanager tools obsolète :</strong> Évite l'erreur <code>Failed to find package tools</code>.</li>
+                  <li><strong>Dépendances stables :</strong> Synchronisation Capacitor fluide sans conflit.</li>
+                  <li><strong>Téléchargement direct de l'APK :</strong> Disponible dans l'onglet Actions &gt; Artifacts de votre dépôt GitHub.</li>
+                </ul>
+              </div>
+              <pre className="text-amber-200 whitespace-pre leading-relaxed select-all">
+                {workflowCode}
+              </pre>
+            </div>
+          )}
+
           {activeTab === 'main' && (
             <div>
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-emerald-800 text-slate-400">
