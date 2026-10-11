@@ -40,9 +40,10 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 6. Configuration automatique de l'Android SDK & Licences
-      - name: Configuration Android SDK
-        uses: android-actions/setup-android@v3
+      # 6. Accepter les licences du SDK Android (préinstallé nativement sur GitHub)
+      - name: Accepter les licences Android
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       # 7. Configuration Capacitor en JSON pur
       - name: Configuration Capacitor en JSON
