@@ -40,12 +40,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 6. Accepter les licences du SDK Android (préinstallé nativement sur GitHub)
-      - name: Accepter les licences Android
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      # 7. Configuration Capacitor en JSON pur
+      # 6. Configuration Capacitor en JSON pur
       - name: Configuration Capacitor en JSON
         run: |
           rm -f capacitor.config.ts
@@ -60,34 +55,36 @@ jobs:
           }
           EOF
 
-      # 8. Initialisation et synchronisation Android
+      # 7. Initialisation et synchronisation Android
       - name: Initialisation et synchronisation Android
         run: |
           rm -rf android
           npx @capacitor/cli add android
           npx @capacitor/cli sync android
 
-      # 9. Configuration des propriétés Gradle (Mémoire + AndroidX)
-      - name: Configuration des propriétés Gradle
+      # 8. Verrouillage SDK Android 34 (100% préinstallé et stable sur GitHub Actions)
+      - name: Ajustement SDK Android 34
         run: |
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
+          sed -i 's/compileSdkVersion = 35/compileSdkVersion = 34/g' android/variables.gradle || true
+          sed -i 's/targetSdkVersion = 35/targetSdkVersion = 34/g' android/variables.gradle || true
+          sed -i 's/compileSdkVersion = 36/compileSdkVersion = 34/g' android/variables.gradle || true
+          sed -i 's/targetSdkVersion = 36/targetSdkVersion = 34/g' android/variables.gradle || true
           echo "org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8" >> android/gradle.properties
           chmod +x android/gradlew
 
-      # 10. Compilation de l'APK (avec --stacktrace pour diagnostic complet)
+      # 9. Compilation de l'APK (Debug installable)
       - name: Compilation de l'APK Android (Debug installable)
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # 11. Préparation de l'APK
+      # 10. Préparation de l'APK
       - name: Préparation de l'APK
         run: |
           mkdir -p apk_output
           cp android/app/build/outputs/apk/debug/app-debug.apk apk_output/Adhan-Algeria.apk
 
-      # 12. Téléversement dans les Artifacts GitHub
+      # 11. Téléversement dans les Artifacts GitHub
       - name: Téléverser l'APK en téléchargement
         uses: actions/upload-artifact@v4
         with:
