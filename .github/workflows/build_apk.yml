@@ -40,30 +40,44 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 6. Initialisation et synchronisation Android (avec nom complet @capacitor/cli)
-      - name: Initialisation du projet Android Capacitor
+      # 6. Configuration Capacitor en JSON pur (évite l'erreur loadExtConfigTS)
+      - name: Configuration Capacitor en JSON
         run: |
-          npx @capacitor/cli init "Adhan" "com.adhan.algeria.app" --web-dir dist || true
+          rm -f capacitor.config.ts
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.adhan.algeria.app",
+            "appName": "Adhan",
+            "webDir": "dist",
+            "server": {
+              "androidScheme": "https"
+            }
+          }
+          EOF
+
+      # 7. Initialisation et synchronisation Android
+      - name: Initialisation et synchronisation Android
+        run: |
           npx @capacitor/cli add android || true
           npx @capacitor/cli sync android
 
-      # 7. Permissions d'exécution Gradle
+      # 8. Permissions d'exécution Gradle
       - name: Permissions d'exécution Gradle
         run: chmod +x android/gradlew
 
-      # 8. Compilation de l'APK (Debug installable sur tout téléphone)
+      # 9. Compilation de l'APK (Debug installable sur tout smartphone)
       - name: Compilation de l'APK Android (Debug installable)
         run: |
           cd android
           ./gradlew assembleDebug
 
-      # 9. Préparation de l'APK
+      # 10. Préparation de l'APK
       - name: Préparation de l'APK
         run: |
           mkdir -p apk_output
           cp android/app/build/outputs/apk/debug/app-debug.apk apk_output/Adhan-Algeria.apk
 
-      # 10. Téléversement dans les Artifacts GitHub
+      # 11. Téléversement dans les Artifacts GitHub
       - name: Téléverser l'APK en téléchargement
         uses: actions/upload-artifact@v4
         with:
