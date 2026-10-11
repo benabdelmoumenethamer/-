@@ -33,14 +33,14 @@ jobs:
       - name: Compilation du frontend Web
         run: npm run build
 
-      # 5. Configuration de Java 17
-      - name: Configuration de Java 17
+      # 5. Configuration de Java 21 (Requis par Capacitor 8 et Gradle 8.11)
+      - name: Configuration de Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
-      # 6. Configuration Capacitor en JSON pur (évite l'erreur loadExtConfigTS)
+      # 6. Configuration Capacitor en JSON pur
       - name: Configuration Capacitor en JSON
         run: |
           rm -f capacitor.config.ts
@@ -65,7 +65,7 @@ jobs:
       - name: Permissions d'exécution Gradle
         run: chmod +x android/gradlew
 
-      # 9. Compilation de l'APK (Debug installable sur tout smartphone)
+      # 9. Compilation de l'APK (Debug installable sur tout téléphone)
       - name: Compilation de l'APK Android (Debug installable)
         run: |
           cd android
