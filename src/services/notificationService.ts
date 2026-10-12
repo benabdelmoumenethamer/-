@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { MUEZZIN_OPTIONS } from '../data/muezzins';
 import { Language, MuezzinOption, PrayerKey, PrayerSettings, PrayerTimeInfo } from '../types/prayer';
@@ -18,14 +18,41 @@ export interface ActiveAlertData {
   isTest?: boolean;
 }
 
-type AlertCallback = (data: ActiveAlertData) => void;
+export type AlertCallback = (data: ActiveAlertData) => void;
+
+export interface PhoneRingerStatus {
+  mode: 'normal' | 'vibrate' | 'silent';
+  canPlaySound: boolean;
+  shouldVibrate: boolean;
+  ringVolume: number;
+  mediaVolume: number;
+}
+
+export interface AdhanAudioPluginInterface {
+  getRingerMode(): Promise<PhoneRingerStatus & { ringerModeInt: number }>;
+  playAdhan(options: { soundName: string }): Promise<{
+    status: 'playing' | 'vibrate' | 'silent' | 'error';
+    mode: 'normal' | 'vibrate' | 'silent';
+    soundName?: string;
+    playedSound?: boolean;
+    vibrated?: boolean;
+    message?: string;
+  }>;
+  stopAdhan(): Promise<{ status: string }>;
+  isPlaying(): Promise<{ isPlaying: boolean }>;
+}
+
+const AdhanAudio = registerPlugin<AdhanAudioPluginInterface>('AdhanAudio');
 
 class AudioAndNotificationManager {
   private audioElement: HTMLAudioElement | null = null;
   private audioContext: AudioContext | null = null;
   private currentMuezzin: MuezzinOption | null = null;
   private isPlaying = false;
+  private isVibrating = false;
   private isAudioBlocked = false;
+  private phoneRingerMode: 'normal' | 'vibrate' | 'silent' = 'normal';
+  private ringVolume = 1.0;
   private volume = 1.0;
   private listeners: Set<() => void> = new Set();
   private alertListeners: Set<AlertCallback> = new Set();
@@ -39,6 +66,7 @@ class AudioAndNotificationManager {
       this.attachAudioUnlockListeners();
       this.initNativeChannel();
       this.initNativeListeners();
+      this.fetchPhoneRingerStatus().catch(() => {});
     }
   }
 
@@ -50,6 +78,7 @@ class AudioAndNotificationManager {
 
     this.audioElement.addEventListener('play', () => {
       this.isPlaying = true;
+      this.isVibrating = false;
       this.isAudioBlocked = false;
       this.notifyListeners();
     });
@@ -61,6 +90,7 @@ class AudioAndNotificationManager {
 
     this.audioElement.addEventListener('ended', () => {
       this.isPlaying = false;
+      this.isVibrating = false;
       this.notifyListeners();
     });
 
@@ -134,15 +164,16 @@ class AudioAndNotificationManager {
   private async initNativeChannel() {
     if (!Capacitor.isNativePlatform() || this.channelCreated) return;
     try {
-      // Clean up previous channel to ensure sound settings are updated on device
       try {
         await LocalNotifications.deleteChannel({ id: 'adhan_prayers_channel' });
+        await LocalNotifications.deleteChannel({ id: 'adhan_prayers_channel_v2' });
+        await LocalNotifications.deleteChannel({ id: 'adhan_prayers_channel_v3' });
       } catch {
-        // Ignored if didn't exist
+        // Ignored
       }
 
       await LocalNotifications.createChannel({
-        id: 'adhan_prayers_channel_v3',
+        id: 'adhan_prayers_channel_v4',
         name: 'آذان – أوقات الصلاة (Adhan)',
         description: 'تنبيهات وأصوات الأذان للصلوات الخمس المفروضة',
         importance: 5, // MAX importance (heads-up notification)
@@ -159,6 +190,37 @@ class AudioAndNotificationManager {
   }
 
   /**
+   * Query the physical phone ringer state (Normal, Vibrate, Silent) via native AdhanAudio plugin
+   */
+  public async fetchPhoneRingerStatus(): Promise<PhoneRingerStatus> {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const res = await AdhanAudio.getRingerMode();
+        this.phoneRingerMode = res.mode;
+        this.ringVolume = res.ringVolume ?? 1.0;
+        this.notifyListeners();
+        return {
+          mode: res.mode,
+          canPlaySound: res.canPlaySound,
+          shouldVibrate: res.shouldVibrate,
+          ringVolume: res.ringVolume,
+          mediaVolume: res.mediaVolume,
+        };
+      } catch (e) {
+        console.warn('Could not query native ringer mode:', e);
+      }
+    }
+
+    return {
+      mode: this.phoneRingerMode,
+      canPlaySound: true,
+      shouldVibrate: false,
+      ringVolume: 1.0,
+      mediaVolume: 1.0,
+    };
+  }
+
+  /**
    * Listen to native notification taps to start Adhan audio when user opens the app via notification
    */
   private initNativeListeners() {
@@ -172,7 +234,7 @@ class AudioAndNotificationManager {
         const titleAr = extra?.prayerTitleAr || 'الصلاة';
         const titleFr = extra?.prayerTitleFr || 'Prière';
 
-        // Play the Adhan audio immediately upon opening notification!
+        // Play the Adhan audio following device ringer mode!
         this.playMuezzin(muezzinId);
 
         // Show active visual prayer alert
@@ -185,11 +247,17 @@ class AudioAndNotificationManager {
       });
 
       LocalNotifications.addListener('localNotificationReceived', (notification) => {
-        // Notification received while app is active in foreground
         const extra = notification.extra;
         const muezzinId = extra?.muezzinId || 'algeria';
         this.playMuezzin(muezzinId);
       });
+
+      // Poll ringer status when app resumes focus
+      if (typeof window !== 'undefined') {
+        window.addEventListener('focus', () => {
+          this.fetchPhoneRingerStatus().catch(() => {});
+        });
+      }
 
       this.nativeListenersAttached = true;
     } catch (e) {
@@ -217,6 +285,18 @@ class AudioAndNotificationManager {
 
   public getIsPlaying(): boolean {
     return this.isPlaying;
+  }
+
+  public getIsVibrating(): boolean {
+    return this.isVibrating;
+  }
+
+  public getPhoneRingerMode(): 'normal' | 'vibrate' | 'silent' {
+    return this.phoneRingerMode;
+  }
+
+  public getRingVolume(): number {
+    return this.ringVolume;
   }
 
   public getIsAudioBlocked(): boolean {
@@ -294,7 +374,7 @@ class AudioAndNotificationManager {
 
   public hasNotificationPermission(): boolean {
     if (typeof window === 'undefined') return false;
-    if (Capacitor.isNativePlatform()) return true; // Handled by plugin
+    if (Capacitor.isNativePlatform()) return true;
     if (!('Notification' in window)) return false;
     return Notification.permission === 'granted';
   }
@@ -353,7 +433,7 @@ class AudioAndNotificationManager {
               at: prayerDate,
               allowWhileIdle: true, // Wakes Android phone from deep sleep
             },
-            channelId: 'adhan_prayers_channel_v3',
+            channelId: 'adhan_prayers_channel_v4',
             sound: soundFile,
             extra: {
               prayerKey: prayer.key,
@@ -380,7 +460,7 @@ class AudioAndNotificationManager {
                 at: preDate,
                 allowWhileIdle: true,
               },
-              channelId: 'adhan_prayers_channel_v3',
+              channelId: 'adhan_prayers_channel_v4',
               sound: soundFile,
             });
           }
@@ -403,15 +483,6 @@ class AudioAndNotificationManager {
     title: string,
     options: NotificationOptions & { soundFile?: string } = {}
   ): Promise<void> {
-    // Vibrate device if supported
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate([500, 250, 500, 250, 1000]);
-      } catch {
-        // Ignored
-      }
-    }
-
     if (Capacitor.isNativePlatform()) {
       try {
         await this.initNativeChannel();
@@ -422,7 +493,7 @@ class AudioAndNotificationManager {
               title,
               body: (options.body as string) || '',
               schedule: { at: new Date(Date.now() + 100) },
-              channelId: 'adhan_prayers_channel_v3',
+              channelId: 'adhan_prayers_channel_v4',
               sound: options.soundFile || 'adhan_algeria.mp3',
             },
           ],
@@ -430,6 +501,15 @@ class AudioAndNotificationManager {
         return;
       } catch (e) {
         console.warn('Native immediate notification error:', e);
+      }
+    }
+
+    // Web vibration fallback
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([500, 250, 500, 250, 1000]);
+      } catch {
+        // Ignored
       }
     }
 
@@ -455,18 +535,64 @@ class AudioAndNotificationManager {
   }
 
   /**
-   * Plays authentic Muezzin recitation with multiple fallbacks
+   * Plays authentic Muezzin recitation.
+   * On Native Android:
+   *  - Respects physical phone ringer state (Normal, Vibrate, Silent)
+   *  - In Normal mode: routes through STREAM_RING / USAGE_NOTIFICATION_RINGTONE so it is audible
+   *    even if multimedia volume is 0!
+   *  - In Vibrate mode: vibrates phone without sound
+   *  - In Silent mode: remains completely silent
    */
   public async playMuezzin(muezzinId: string): Promise<void> {
     const muezzin = MUEZZIN_OPTIONS.find((m) => m.id === muezzinId) || MUEZZIN_OPTIONS[0];
     this.currentMuezzin = muezzin;
 
+    // 1. Try Native Android AdhanAudio Plugin first
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const soundBase = `adhan_${muezzin.id || 'algeria'}`;
+        const res = await AdhanAudio.playAdhan({ soundName: soundBase });
+        this.phoneRingerMode = res.mode;
+
+        if (res.status === 'playing') {
+          this.isPlaying = true;
+          this.isVibrating = false;
+          this.isAudioBlocked = false;
+          this.notifyListeners();
+          return;
+        } else if (res.status === 'vibrate') {
+          this.isPlaying = false;
+          this.isVibrating = true;
+          this.isAudioBlocked = false;
+          this.notifyListeners();
+          return;
+        } else if (res.status === 'silent') {
+          this.isPlaying = false;
+          this.isVibrating = false;
+          this.isAudioBlocked = false;
+          this.notifyListeners();
+          return;
+        }
+      } catch (err) {
+        console.warn('Native AdhanAudio plugin error, falling back to Web Audio:', err);
+      }
+    }
+
+    // 2. Web / PWA fallback
     this.stopAudio();
     this.initAudioElement();
 
     if (!this.audioElement) return;
 
-    // Resolve URL safely (works across Web, PWA, and Capacitor WebView)
+    // If web browser supports vibration, also vibrate lightly
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([500, 250, 500, 250, 1000]);
+      } catch {
+        // Ignored
+      }
+    }
+
     const targetUrl = typeof window !== 'undefined'
       ? new URL(muezzin.audioUrl, window.location.href).href
       : muezzin.audioUrl;
@@ -476,12 +602,12 @@ class AudioAndNotificationManager {
       this.audioElement.currentTime = 0;
       await this.audioElement.play();
       this.isPlaying = true;
+      this.isVibrating = false;
       this.isAudioBlocked = false;
       this.notifyListeners();
     } catch (err: unknown) {
       console.warn('Primary audio playback error:', err);
 
-      // Check if blocked by browser autoplay policy
       const errorMsg = String(err);
       if (errorMsg.includes('NotAllowedError') || errorMsg.includes('interact')) {
         this.isAudioBlocked = true;
@@ -511,11 +637,20 @@ class AudioAndNotificationManager {
   }
 
   public stopAudio(): void {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        AdhanAudio.stopAdhan().catch(() => {});
+      } catch {
+        // Ignored
+      }
+    }
+
     if (this.audioElement) {
       this.audioElement.pause();
       this.audioElement.currentTime = 0;
     }
     this.isPlaying = false;
+    this.isVibrating = false;
     this.isAudioBlocked = false;
     this.notifyListeners();
   }
@@ -584,7 +719,7 @@ class AudioAndNotificationManager {
         ? `حي على الصلاة، حي على الفلاح (الله أكبر)`
         : `Accourez à la prière, accourez au succès`;
 
-      // Trigger system notification with custom sound
+      // Trigger system notification
       this.sendNotification(notifTitle, {
         body: notifBody,
         tag: exactKey,
@@ -599,7 +734,7 @@ class AudioAndNotificationManager {
         time: prayerTime,
       });
 
-      // Play vocal adhan audio
+      // Play vocal adhan audio (AdhanAudio will automatically obey phone ringer mode!)
       if (prayerConfig.playAdhan && settings.fullAdhanEnabled) {
         this.playMuezzin(settings.selectedMuezzinId);
       }
@@ -635,6 +770,9 @@ class AudioAndNotificationManager {
     this.unlockAudio();
     const hasPerm = await this.requestNotificationPermission();
 
+    // Refresh phone ringer status
+    await this.fetchPhoneRingerStatus();
+
     const isArabic = settings.language === 'ar';
     const notifTitle = isArabic
       ? '🔔 اختبار الأذان: التنبيهات تعمل بنجاح'
@@ -655,7 +793,7 @@ class AudioAndNotificationManager {
       isTest: true,
     });
 
-    // Play sound immediately
+    // Play sound or vibrate based on phone state
     await this.playMuezzin(settings.selectedMuezzinId);
 
     return hasPerm;

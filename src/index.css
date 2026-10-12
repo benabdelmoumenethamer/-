@@ -7,8 +7,20 @@
     --color-gold: #f59e0b;
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --header-safe-pt: calc(env(safe-area-inset-top, 0px) + 0.5rem);
-    --bottom-nav-safe-pb: calc(env(safe-area-inset-bottom, 0px) + 0.65rem);
+    --header-safe-pt: calc(max(env(safe-area-inset-top, 0px), var(--safe-top, 0px)) + 0.5rem);
+    --bottom-nav-safe-pb: calc(max(env(safe-area-inset-bottom, 0px), var(--safe-bottom, 0px)) + 0.65rem);
+  }
+
+  @media (max-width: 640px) {
+    :root {
+      --safe-top: max(env(safe-area-inset-top, 0px), 1.25rem);
+      --safe-bottom: max(env(safe-area-inset-bottom, 0px), 2rem);
+    }
+  }
+
+  .is-native-app {
+    --safe-top: 0px !important;
+    --safe-bottom: 0.25rem !important;
   }
 
   body {

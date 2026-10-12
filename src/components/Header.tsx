@@ -63,20 +63,20 @@ export const Header: React.FC<Props> = ({
     <header
       className="sticky top-0 z-40 w-full bg-emerald-950/98 backdrop-blur-md border-b border-emerald-800/60 transition-all shadow-md"
       style={{
-        paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 0px) + 0.35rem)',
+        paddingTop: 'calc(max(env(safe-area-inset-top, 0px), var(--safe-top, 0px)) + 0.45rem)',
       }}
     >
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 sm:gap-2">
         {/* Brand & App Title */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/25 border border-amber-300/40 flex-shrink-0">
-            <span className="text-emerald-950 font-black text-base sm:text-xl font-quran select-none">
+            <span className="text-emerald-950 font-black text-sm sm:text-xl font-quran select-none">
               أذان
             </span>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <h1 className="text-sm sm:text-lg font-black tracking-tight text-white truncate">
+              <h1 className="text-xs sm:text-lg font-black tracking-tight text-white truncate">
                 <span>{isArabic ? 'آذان – أوقات الصلاة' : 'Adhan – Prières'}</span>
               </h1>
               <span className="hidden md:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30 flex-shrink-0">
@@ -84,7 +84,7 @@ export const Header: React.FC<Props> = ({
               </span>
             </div>
             {/* Hijri & Gregorian Dates */}
-            <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-emerald-200/80 truncate">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-emerald-200/80 truncate">
               <span className="font-semibold text-amber-300/90 font-quran text-xs sm:text-sm truncate">
                 {isArabic ? hijriDate.formattedAr : hijriDate.formattedFr}
               </span>
@@ -144,10 +144,20 @@ export const Header: React.FC<Props> = ({
             <span>{isArabic ? 'APK' : 'APK'}</span>
           </button>
 
+          {/* Settings button - PRIORITY #1: PROMINENT & ALWAYS VISIBLE */}
+          <button
+            onClick={onOpenSettings}
+            className="p-1.5 sm:p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/60 hover:border-amber-300 transition cursor-pointer flex-shrink-0 shadow-md shadow-amber-500/10 flex items-center justify-center group active:scale-95"
+            title={isArabic ? 'الإعدادات' : 'Paramètres'}
+            aria-label="Paramètres"
+          >
+            <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform text-amber-300" />
+          </button>
+
           {/* Silent mode toggle - Always visible */}
           <button
             onClick={onToggleSilentMode}
-            className={`p-2 rounded-xl border transition cursor-pointer flex-shrink-0 ${
+            className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer flex-shrink-0 active:scale-95 ${
               silentMode
                 ? 'bg-rose-950/70 border-rose-600/60 text-rose-300 hover:bg-rose-900/80'
                 : 'bg-emerald-900/60 border-emerald-700/60 text-emerald-300 hover:bg-emerald-800'
@@ -168,7 +178,7 @@ export const Header: React.FC<Props> = ({
           {/* Language Switcher - Always visible */}
           <button
             onClick={() => onLanguageChange(isArabic ? 'fr' : 'ar')}
-            className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 text-xs font-bold transition cursor-pointer flex-shrink-0"
+            className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 text-[11px] sm:text-xs font-bold transition cursor-pointer flex-shrink-0 active:scale-95"
             title={isArabic ? 'Changer en Français' : 'التحويل إلى العربية'}
           >
             {isArabic ? 'FR' : 'عربي'}
@@ -178,16 +188,6 @@ export const Header: React.FC<Props> = ({
           <div className="hidden sm:block">
             <PWAInstallButton language={language} />
           </div>
-
-          {/* Settings button - PRIORITY #1: ALWAYS VISIBLE ON ALL SCREENS */}
-          <button
-            onClick={onOpenSettings}
-            className="p-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-emerald-900/90 hover:from-amber-500/30 hover:to-emerald-800 text-amber-300 border border-amber-400/50 hover:border-amber-300 transition cursor-pointer flex-shrink-0 shadow-md shadow-amber-500/10 flex items-center justify-center group"
-            title={isArabic ? 'الإعدادات' : 'Paramètres'}
-            aria-label="Paramètres"
-          >
-            <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
-          </button>
         </div>
       </div>
     </header>

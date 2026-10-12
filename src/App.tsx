@@ -146,15 +146,15 @@ export const App: React.FC = () => {
 
     if (isNative) {
       document.documentElement.classList.add('is-native-app');
-      document.documentElement.style.setProperty('--safe-top', '38px');
-      document.documentElement.style.setProperty('--safe-bottom', '56px');
+      document.documentElement.style.setProperty('--safe-top', '0px');
+      document.documentElement.style.setProperty('--safe-bottom', '0.25rem');
     } else if (isStandalone) {
       document.documentElement.classList.add('is-standalone-pwa');
-      document.documentElement.style.setProperty('--safe-top', 'max(env(safe-area-inset-top, 0px), 28px)');
-      document.documentElement.style.setProperty('--safe-bottom', 'max(env(safe-area-inset-bottom, 0px), 24px)');
+      document.documentElement.style.setProperty('--safe-top', 'max(env(safe-area-inset-top, 0px), 1.25rem)');
+      document.documentElement.style.setProperty('--safe-bottom', 'max(env(safe-area-inset-bottom, 0px), 2rem)');
     } else {
-      document.documentElement.style.setProperty('--safe-top', 'env(safe-area-inset-top, 0px)');
-      document.documentElement.style.setProperty('--safe-bottom', 'env(safe-area-inset-bottom, 0px)');
+      document.documentElement.style.setProperty('--safe-top', 'max(env(safe-area-inset-top, 0px), 0.75rem)');
+      document.documentElement.style.setProperty('--safe-bottom', 'max(env(safe-area-inset-bottom, 0px), 1.75rem)');
     }
   }, []);
 
@@ -305,7 +305,7 @@ export const App: React.FC = () => {
     <div
       className="min-h-screen bg-islamic-pattern text-slate-100 flex flex-col selection:bg-amber-500 selection:text-emerald-950"
       style={{
-        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0px) + 6rem)',
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), var(--safe-bottom, 0px)) + 5.5rem)',
       }}
     >
       {/* Autoplay unblock floating prompt if audio was blocked by browser policy */}
