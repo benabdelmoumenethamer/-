@@ -24,7 +24,12 @@ export const AudioPlayerBar: React.FC<Props> = ({
   if (!isPlaying) return null;
 
   return (
-    <div className="fixed bottom-4 inset-x-4 max-w-xl mx-auto z-40 bg-emerald-950/95 border border-amber-400/80 rounded-2xl shadow-2xl backdrop-blur-md p-3 sm:p-3.5 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200">
+    <div
+      className="fixed inset-x-3 sm:inset-x-4 max-w-xl mx-auto z-40 bg-emerald-950/98 border border-amber-400/80 rounded-2xl shadow-2xl backdrop-blur-md p-3 sm:p-3.5 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200 sm:bottom-4"
+      style={{
+        bottom: 'calc(max(env(safe-area-inset-bottom, 0px), var(--safe-bottom, 12px)) + 4.25rem)',
+      }}
+    >
       <div className="flex items-center gap-3 overflow-hidden">
         <div className="w-9 h-9 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center flex-shrink-0 animate-pulse">
           <Music className="w-4 h-4" />

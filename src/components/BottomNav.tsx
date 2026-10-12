@@ -32,7 +32,10 @@ export const BottomNav: React.FC<Props> = ({
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-emerald-950/95 backdrop-blur-xl border-t border-emerald-800/80 px-2 py-1.5 shadow-2xl safe-area-pb"
+      className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-emerald-950/98 backdrop-blur-xl border-t border-emerald-800/80 px-2 pt-2 shadow-2xl transition-all"
+      style={{
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), var(--safe-bottom, 12px))',
+      }}
     >
       <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
         {/* 1. Home / Prayer Times */}

@@ -60,7 +60,12 @@ export const Header: React.FC<Props> = ({
   });
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-emerald-950/95 backdrop-blur-md border-b border-emerald-800/60 transition-all shadow-md">
+    <header
+      className="sticky top-0 z-40 w-full bg-emerald-950/98 backdrop-blur-md border-b border-emerald-800/60 transition-all shadow-md"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top, 0px), var(--safe-top, 0px))',
+      }}
+    >
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2">
         {/* Brand & App Title */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">

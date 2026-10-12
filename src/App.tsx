@@ -26,6 +26,7 @@ import {
   PrayerSettings,
 } from './types/prayer';
 
+import { Capacitor } from '@capacitor/core';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { HeroNextPrayer } from './components/HeroNextPrayer';
@@ -134,6 +135,28 @@ export const App: React.FC = () => {
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     localStorage.setItem('adhan_lang', language);
   }, [language]);
+
+  // Dynamically configure safe area insets for Android system bars (status bar & 3-button nav)
+  useEffect(() => {
+    const isNative = Capacitor.isNativePlatform();
+    const isStandalone =
+      typeof window !== 'undefined' &&
+      (window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone);
+
+    if (isNative) {
+      document.documentElement.classList.add('is-native-app');
+      document.documentElement.style.setProperty('--safe-top', '38px');
+      document.documentElement.style.setProperty('--safe-bottom', '56px');
+    } else if (isStandalone) {
+      document.documentElement.classList.add('is-standalone-pwa');
+      document.documentElement.style.setProperty('--safe-top', 'max(env(safe-area-inset-top, 0px), 28px)');
+      document.documentElement.style.setProperty('--safe-bottom', 'max(env(safe-area-inset-bottom, 0px), 24px)');
+    } else {
+      document.documentElement.style.setProperty('--safe-top', 'env(safe-area-inset-top, 0px)');
+      document.documentElement.style.setProperty('--safe-bottom', 'env(safe-area-inset-bottom, 0px)');
+    }
+  }, []);
 
   // Persist location
   useEffect(() => {
@@ -279,10 +302,20 @@ export const App: React.FC = () => {
   const isArabic = language === 'ar';
 
   return (
-    <div className="min-h-screen bg-islamic-pattern text-slate-100 flex flex-col selection:bg-amber-500 selection:text-emerald-950 pb-24 sm:pb-12">
+    <div
+      className="min-h-screen bg-islamic-pattern text-slate-100 flex flex-col selection:bg-amber-500 selection:text-emerald-950"
+      style={{
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), var(--safe-bottom, 12px)) + 5.5rem)',
+      }}
+    >
       {/* Autoplay unblock floating prompt if audio was blocked by browser policy */}
       {isAudioBlocked && (
-        <div className="fixed top-14 left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-50 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-emerald-950 font-bold shadow-2xl flex items-center justify-between gap-3 animate-bounce border-2 border-amber-200">
+        <div
+          className="fixed left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-50 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-emerald-950 font-bold shadow-2xl flex items-center justify-between gap-3 animate-bounce border-2 border-amber-200"
+          style={{
+            top: 'calc(max(env(safe-area-inset-top, 0px), var(--safe-top, 0px)) + 3.75rem)',
+          }}
+        >
           <div className="flex items-center gap-2">
             <Volume2 className="w-5 h-5 flex-shrink-0" />
             <span className="text-xs font-black">

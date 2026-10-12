@@ -5,6 +5,8 @@
     --color-emerald-deep: #022c22;
     --color-emerald-card: #064e3b;
     --color-gold: #f59e0b;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   body {
