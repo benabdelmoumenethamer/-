@@ -19,7 +19,6 @@ import {
   calculateQibla,
   getHijriDate,
 } from './services/prayerEngine';
-import { notificationService } from './services/notificationService';
 import {
   Language,
   LocationConfig,
@@ -38,6 +37,9 @@ import { TasbihCounterModal } from './components/TasbihCounterModal';
 import { FlutterAndroidGuideModal } from './components/FlutterAndroidGuideModal';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { AdhanModelSelectorModal } from './components/AdhanModelSelectorModal';
+import { ActivePrayerAlertModal } from './components/ActivePrayerAlertModal';
+import { NotificationPermissionBanner } from './components/NotificationPermissionBanner';
+import { ActiveAlertData, notificationService } from './services/notificationService';
 
 const INITIAL_SETTINGS: PrayerSettings = {
   language: 'ar',
@@ -117,6 +119,7 @@ export const App: React.FC = () => {
   const [isTasbihModalOpen, setIsTasbihModalOpen] = useState(false);
   const [isFlutterGuideOpen, setIsFlutterGuideOpen] = useState(false);
   const [isAdhanModelModalOpen, setIsAdhanModelModalOpen] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<ActiveAlertData | null>(null);
 
   // Active Muezzin
   const activeMuezzin = useMemo(() => {
@@ -174,10 +177,25 @@ export const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
+  // Listen for active prayer alerts (live triggers & tests)
+  useEffect(() => {
+    const unsubscribe = notificationService.onAlertTrigger((data) => {
+      setActiveAlert(data);
+    });
+    return unsubscribe;
+  }, []);
+
   // Compute prayers
   const prayers = useMemo(() => {
     return calculatePrayerTimes(currentTime, location, settings);
   }, [currentTime, location, settings]);
+
+  // Sync / Schedule Native Android background alarms with exact wake-up
+  useEffect(() => {
+    if (prayers.length > 0) {
+      notificationService.scheduleNativePrayerAlarms(prayers, settings);
+    }
+  }, [prayers, settings]);
 
   // Next prayer status
   const nextPrayerStatus = useMemo(() => {
@@ -238,7 +256,7 @@ export const App: React.FC = () => {
   };
 
   const handlePlayTestAdhan = () => {
-    notificationService.playMuezzin(settings.selectedMuezzinId);
+    notificationService.triggerTestAlert(settings);
   };
 
   const handleStopAdhan = () => {
@@ -278,6 +296,13 @@ export const App: React.FC = () => {
 
       {/* Main container */}
       <main className="max-w-4xl mx-auto w-full px-4 pt-4 sm:pt-6 space-y-6 flex-1">
+        {/* Permission & Test Notification Banner */}
+        <NotificationPermissionBanner
+          language={language}
+          settings={settings}
+          onTestAlert={handlePlayTestAdhan}
+        />
+
         {/* Hero Section: Mosque twilight, next prayer & countdown */}
         <HeroNextPrayer
           language={language}
@@ -531,6 +556,13 @@ export const App: React.FC = () => {
         isPlaying={isPlayingAdhan}
         currentMuezzin={currentMuezzin}
         language={language}
+      />
+
+      <ActivePrayerAlertModal
+        alertData={activeAlert}
+        onClose={() => setActiveAlert(null)}
+        language={language}
+        settings={settings}
       />
     </div>
   );

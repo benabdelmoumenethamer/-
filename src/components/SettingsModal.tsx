@@ -139,7 +139,15 @@ export const SettingsModal: React.FC<Props> = ({
               </div>
             </div>
 
-            {!hasNotifPermission && (
+            {hasNotifPermission ? (
+              <button
+                onClick={() => notificationService.triggerTestAlert(settings)}
+                className="px-3.5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-amber-300 font-bold text-xs border border-emerald-600 transition cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>{isArabic ? 'تجربة التنبيه الآن' : 'Tester l\'alerte'}</span>
+              </button>
+            ) : (
               <button
                 onClick={handleRequestNotificationPermission}
                 className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-bold text-xs shadow-md transition cursor-pointer flex-shrink-0"

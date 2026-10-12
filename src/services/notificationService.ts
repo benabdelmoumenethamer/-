@@ -1,5 +1,7 @@
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { MUEZZIN_OPTIONS } from '../data/muezzins';
-import { MuezzinOption, PrayerKey, PrayerSettings } from '../types/prayer';
+import { Language, MuezzinOption, PrayerKey, PrayerSettings, PrayerTimeInfo } from '../types/prayer';
 
 const FALLBACK_CDN_URLS: Record<string, string> = {
   makkah: 'https://cdn.aladhan.com/audio/adhans/a2.mp3',
@@ -8,17 +10,31 @@ const FALLBACK_CDN_URLS: Record<string, string> = {
   alaqsa: 'https://cdn.aladhan.com/audio/adhans/a4.mp3',
 };
 
+export interface ActiveAlertData {
+  key: PrayerKey;
+  titleAr: string;
+  titleFr: string;
+  time: Date;
+  isTest?: boolean;
+}
+
+type AlertCallback = (data: ActiveAlertData) => void;
+
 class AudioAndNotificationManager {
   private audioElement: HTMLAudioElement | null = null;
   private currentMuezzin: MuezzinOption | null = null;
   private isPlaying = false;
   private volume = 0.9;
   private listeners: Set<() => void> = new Set();
-  private notificationHistory: Set<string> = new Set();
+  private alertListeners: Set<AlertCallback> = new Set();
+  private audioUnlocked = false;
+  private channelCreated = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.initAudioElement();
+      this.attachAudioUnlockListeners();
+      this.initNativeChannel();
     }
   }
 
@@ -45,7 +61,6 @@ class AudioAndNotificationManager {
 
     this.audioElement.addEventListener('error', (e) => {
       console.warn('Primary audio source failed, attempting CDN fallback:', e);
-      // Try online CDN fallback with authentic vocal recitation (NO synth, NO music)
       if (this.currentMuezzin && this.audioElement) {
         const fallbackUrl = FALLBACK_CDN_URLS[this.currentMuezzin.id];
         if (fallbackUrl && this.audioElement.src !== fallbackUrl) {
@@ -63,13 +78,78 @@ class AudioAndNotificationManager {
     });
   }
 
+  /**
+   * Unlock Audio Autoplay policy on first user interaction (touch or click)
+   */
+  public attachAudioUnlockListeners() {
+    if (typeof window === 'undefined') return;
+    const unlockHandler = () => {
+      this.unlockAudio();
+      window.removeEventListener('click', unlockHandler);
+      window.removeEventListener('touchstart', unlockHandler);
+    };
+    window.addEventListener('click', unlockHandler, { once: true });
+    window.addEventListener('touchstart', unlockHandler, { once: true });
+  }
+
+  public unlockAudio(): void {
+    if (this.audioUnlocked) return;
+    try {
+      this.initAudioElement();
+      if (this.audioElement) {
+        // Silent audio snippet
+        this.audioElement.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+        this.audioElement.play().then(() => {
+          this.audioElement?.pause();
+          this.audioUnlocked = true;
+        }).catch(() => {
+          // Will retry on next interaction
+        });
+      }
+    } catch {
+      // Ignored
+    }
+  }
+
+  /**
+   * Setup Android Notification Channel with High Importance & Sound
+   */
+  private async initNativeChannel() {
+    if (!Capacitor.isNativePlatform() || this.channelCreated) return;
+    try {
+      await LocalNotifications.createChannel({
+        id: 'adhan_prayers_channel',
+        name: 'آذان – أوقات الصلاة (Adhan)',
+        description: 'تنبيهات وأصوات الأذان للصلوات الخمس المفروضة',
+        importance: 5, // MAX importance (heads-up notification)
+        visibility: 1, // Public
+        sound: 'adhan_algeria.mp3',
+        vibration: true,
+        lights: true,
+        lightColor: '#064E3B',
+      });
+      this.channelCreated = true;
+    } catch (e) {
+      console.warn('Could not create Android notification channel:', e);
+    }
+  }
+
   public subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
+  public onAlertTrigger(callback: AlertCallback): () => void {
+    this.alertListeners.add(callback);
+    return () => this.alertListeners.delete(callback);
+  }
+
   private notifyListeners() {
     this.listeners.forEach((l) => l());
+  }
+
+  private notifyAlertListeners(data: ActiveAlertData) {
+    this.alertListeners.forEach((l) => l(data));
   }
 
   public getIsPlaying(): boolean {
@@ -92,10 +172,51 @@ class AudioAndNotificationManager {
     this.notifyListeners();
   }
 
+  /**
+   * Check current permission status
+   */
+  public async getPermissionStatus(): Promise<'granted' | 'denied' | 'prompt'> {
+    if (typeof window === 'undefined') return 'denied';
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const perm = await LocalNotifications.checkPermissions();
+        if (perm.display === 'granted') return 'granted';
+        if (perm.display === 'denied') return 'denied';
+        return 'prompt';
+      } catch {
+        return 'prompt';
+      }
+    }
+
+    if (!('Notification' in window)) return 'denied';
+    if (Notification.permission === 'granted') return 'granted';
+    if (Notification.permission === 'denied') return 'denied';
+    return 'prompt';
+  }
+
+  /**
+   * Request system notification permission (Native Android or Web)
+   */
   public async requestNotificationPermission(): Promise<boolean> {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
+    if (typeof window === 'undefined') return false;
+    this.unlockAudio();
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await this.initNativeChannel();
+        const perm = await LocalNotifications.requestPermissions();
+        return perm.display === 'granted';
+      } catch (err) {
+        console.warn('Native permission request error:', err);
+        return false;
+      }
+    }
+
+    if (!('Notification' in window)) {
       return false;
     }
+
     try {
       const permission = await Notification.requestPermission();
       return permission === 'granted';
@@ -105,23 +226,140 @@ class AudioAndNotificationManager {
   }
 
   public hasNotificationPermission(): boolean {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      return false;
-    }
+    if (typeof window === 'undefined') return false;
+    if (Capacitor.isNativePlatform()) return true; // Handled by plugin
+    if (!('Notification' in window)) return false;
     return Notification.permission === 'granted';
   }
 
-  public sendNotification(title: string, options: NotificationOptions = {}): void {
+  /**
+   * Schedule Native Android background alarms with exact wake-up in Doze mode
+   */
+  public async scheduleNativePrayerAlarms(
+    prayers: PrayerTimeInfo[],
+    settings: PrayerSettings
+  ): Promise<void> {
+    if (!Capacitor.isNativePlatform() || settings.silentMode) return;
+
+    try {
+      await this.initNativeChannel();
+
+      // Clear existing scheduled adhan notifications
+      const pending = await LocalNotifications.getPending();
+      if (pending.notifications.length > 0) {
+        await LocalNotifications.cancel({ notifications: pending.notifications });
+      }
+
+      const isArabic = settings.language === 'ar';
+      const toSchedule: {
+        id: number;
+        title: string;
+        body: string;
+        schedule: { at: Date; allowWhileIdle: boolean };
+        channelId: string;
+        smallIcon?: string;
+      }[] = [];
+
+      const now = new Date();
+
+      prayers.forEach((prayer, index) => {
+        if (prayer.key === 'sunrise') return;
+        const config = settings.prayerSoundConfig[prayer.key];
+        if (!config?.enabled) return;
+
+        const prayerTitle = isArabic ? prayer.titleAr : prayer.titleFr;
+        const prayerDate = new Date(prayer.time);
+
+        // Schedule exact prayer alarm if in the future
+        if (prayerDate.getTime() > now.getTime()) {
+          toSchedule.push({
+            id: index * 10 + 1,
+            title: isArabic
+              ? `حان الآن موعد صلاة ${prayerTitle}`
+              : `C'est l'heure de la prière de ${prayerTitle}`,
+            body: isArabic
+              ? `حي على الصلاة، حي على الفلاح (الله أكبر)`
+              : `Accourez à la prière, accourez au succès`,
+            schedule: {
+              at: prayerDate,
+              allowWhileIdle: true, // Wakes Android phone from deep sleep
+            },
+            channelId: 'adhan_prayers_channel',
+          });
+        }
+
+        // Schedule pre-notification if configured
+        if (settings.preNotificationMinutes > 0) {
+          const preDate = new Date(prayerDate.getTime() - settings.preNotificationMinutes * 60000);
+          if (preDate.getTime() > now.getTime()) {
+            toSchedule.push({
+              id: index * 10 + 2,
+              title: isArabic
+                ? `اقتراب صلاة ${prayerTitle}`
+                : `Rappel : Prière de ${prayerTitle} imminente`,
+              body: isArabic
+                ? `بقي ${settings.preNotificationMinutes} دقيقة على موعد الأذان`
+                : `Plus que ${settings.preNotificationMinutes} minutes avant l'Adhan`,
+              schedule: {
+                at: preDate,
+                allowWhileIdle: true,
+              },
+              channelId: 'adhan_prayers_channel',
+            });
+          }
+        }
+      });
+
+      if (toSchedule.length > 0) {
+        await LocalNotifications.schedule({ notifications: toSchedule });
+        console.log(`Scheduled ${toSchedule.length} native Android prayer alarms successfully.`);
+      }
+    } catch (err) {
+      console.warn('Native prayer scheduling error:', err);
+    }
+  }
+
+  /**
+   * Send a system notification (Web / Service Worker / Native)
+   */
+  public async sendNotification(title: string, options: NotificationOptions = {}): Promise<void> {
+    // Vibrate device if supported
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([400, 200, 400, 200, 800]);
+      } catch {
+        // Ignored
+      }
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: Date.now() % 100000,
+              title,
+              body: (options.body as string) || '',
+              schedule: { at: new Date(Date.now() + 100) },
+              channelId: 'adhan_prayers_channel',
+            },
+          ],
+        });
+        return;
+      } catch (e) {
+        console.warn('Native immediate notification error:', e);
+      }
+    }
+
     if (!this.hasNotificationPermission()) return;
 
     try {
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.ready.then((reg) => {
-          (reg as unknown as { showNotification: (t: string, o?: Record<string, unknown>) => Promise<void> }).showNotification(title, {
-            icon: '/pwa-192x192.png',
-            badge: '/icon.svg',
-            ...options,
-          });
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, {
+          icon: '/pwa-192x192.png',
+          badge: '/icon.svg',
+          ...options,
         });
       } else {
         new Notification(title, {
@@ -135,8 +373,7 @@ class AudioAndNotificationManager {
   }
 
   /**
-   * Plays the authentic, human vocal Adhan recitation.
-   * Completely devoid of musical instruments or synthesizers.
+   * Plays authentic Muezzin recitation
    */
   public async playMuezzin(muezzinId: string): Promise<void> {
     const muezzin = MUEZZIN_OPTIONS.find((m) => m.id === muezzinId) || MUEZZIN_OPTIONS[0];
@@ -182,7 +419,38 @@ class AudioAndNotificationManager {
   }
 
   /**
-   * Checks if an adhan or pre-prayer notification should be sent right now
+   * Get / store triggered history in localStorage to avoid missed or duplicate alerts
+   */
+  private isAlreadyTriggered(key: string): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const raw = localStorage.getItem('adhan_triggered_cache');
+      const set = raw ? JSON.parse(raw) : [];
+      return set.includes(key);
+    } catch {
+      return false;
+    }
+  }
+
+  private markTriggered(key: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('adhan_triggered_cache');
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      if (!list.includes(key)) {
+        list.push(key);
+        // Keep only last 20 entries
+        if (list.length > 20) list.shift();
+        localStorage.setItem('adhan_triggered_cache', JSON.stringify(list));
+      }
+    } catch {
+      // Ignored
+    }
+  }
+
+  /**
+   * Main prayer monitor called every second by App.tsx
+   * Uses a generous window (-10s to +180s) to guarantee triggers even if tab sleeps or lags
    */
   public checkAndTriggerPrayerAlert(
     prayerKey: PrayerKey,
@@ -190,23 +458,23 @@ class AudioAndNotificationManager {
     prayerNameFr: string,
     prayerTime: Date,
     settings: PrayerSettings
-  ) {
+  ): void {
     if (settings.silentMode) return;
-
-    const now = new Date();
-    const diffMs = prayerTime.getTime() - now.getTime();
-    const diffMinutes = Math.round(diffMs / 60000);
 
     const prayerConfig = settings.prayerSoundConfig[prayerKey];
     if (!prayerConfig?.enabled) return;
 
+    const now = new Date();
+    const diffMs = prayerTime.getTime() - now.getTime();
+    const dateStr = prayerTime.toISOString().slice(0, 10);
+
     const isArabic = settings.language === 'ar';
     const prayerTitle = isArabic ? prayerNameAr : prayerNameFr;
 
-    // 1. Exact prayer time trigger (window between 0 and 1 min)
-    const exactKey = `exact_${prayerKey}_${prayerTime.toISOString().slice(0, 10)}`;
-    if (diffMs <= 5000 && diffMs >= -59000 && !this.notificationHistory.has(exactKey)) {
-      this.notificationHistory.add(exactKey);
+    // 1. Exact prayer time trigger (Window: 5 seconds before to 3 minutes after)
+    const exactKey = `exact_${prayerKey}_${dateStr}`;
+    if (diffMs <= 5000 && diffMs >= -180000 && !this.isAlreadyTriggered(exactKey)) {
+      this.markTriggered(exactKey);
 
       const notifTitle = isArabic
         ? `حان الآن موعد صلاة ${prayerTitle}`
@@ -215,21 +483,34 @@ class AudioAndNotificationManager {
         ? `حي على الصلاة، حي على الفلاح (الله أكبر)`
         : `Accourez à la prière, accourez au succès`;
 
+      // Trigger system notification
       this.sendNotification(notifTitle, { body: notifBody, tag: exactKey });
 
+      // Trigger active in-app visual alert overlay
+      this.notifyAlertListeners({
+        key: prayerKey,
+        titleAr: prayerNameAr,
+        titleFr: prayerNameFr,
+        time: prayerTime,
+      });
+
+      // Play vocal adhan audio
       if (prayerConfig.playAdhan && settings.fullAdhanEnabled) {
         this.playMuezzin(settings.selectedMuezzinId);
       }
     }
 
-    // 2. Pre-prayer alert (configured e.g. 5, 10, or 15 minutes before)
+    // 2. Pre-prayer alert
     if (settings.preNotificationMinutes > 0) {
-      const preKey = `pre_${prayerKey}_${prayerTime.toISOString().slice(0, 10)}_${settings.preNotificationMinutes}`;
+      const preKey = `pre_${prayerKey}_${dateStr}_${settings.preNotificationMinutes}`;
+      const targetPreMs = settings.preNotificationMinutes * 60000;
+      // Window: within 60 seconds around the pre-notification time
       if (
-        diffMinutes === settings.preNotificationMinutes &&
-        !this.notificationHistory.has(preKey)
+        diffMs <= targetPreMs + 10000 &&
+        diffMs >= targetPreMs - 50000 &&
+        !this.isAlreadyTriggered(preKey)
       ) {
-        this.notificationHistory.add(preKey);
+        this.markTriggered(preKey);
 
         const notifTitle = isArabic
           ? `اقتراب صلاة ${prayerTitle}`
@@ -241,6 +522,38 @@ class AudioAndNotificationManager {
         this.sendNotification(notifTitle, { body: notifBody, tag: preKey });
       }
     }
+  }
+
+  /**
+   * Immediate interactive test alert (Audio + Notification + Vibreur + In-app Overlay)
+   */
+  public async triggerTestAlert(settings: PrayerSettings): Promise<boolean> {
+    this.unlockAudio();
+    const hasPerm = await this.requestNotificationPermission();
+
+    const isArabic = settings.language === 'ar';
+    const notifTitle = isArabic
+      ? '🔔 اختبار الأذان: التنبيهات تعمل بنجاح'
+      : "🔔 Test d'alerte Adhan : Tout fonctionne parfaitement";
+    const notifBody = isArabic
+      ? 'تم تفعيل التنبيه الصوتي والإشعار بنجاح لجميع الصلوات'
+      : 'Les notifications et la récitation audio sont bien configurées';
+
+    await this.sendNotification(notifTitle, { body: notifBody });
+
+    // In-app alert
+    this.notifyAlertListeners({
+      key: 'fajr',
+      titleAr: 'اختبار الأذان (تجريبي)',
+      titleFr: 'Test d\'alerte Adhan',
+      time: new Date(),
+      isTest: true,
+    });
+
+    // Play sound
+    await this.playMuezzin(settings.selectedMuezzinId);
+
+    return hasPerm;
   }
 }
 
