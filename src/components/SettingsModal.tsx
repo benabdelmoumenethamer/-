@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   X,
   Volume2,
+  VolumeX,
   Bell,
   Clock,
   Sliders,
@@ -9,6 +10,9 @@ import {
   Square,
   ShieldCheck,
   CheckCircle2,
+  Smartphone,
+  Vibrate,
+  RotateCw,
 } from 'lucide-react';
 import { MUEZZIN_OPTIONS } from '../data/muezzins';
 import { notificationService } from '../services/notificationService';
@@ -34,6 +38,30 @@ export const SettingsModal: React.FC<Props> = ({
   const [hasNotifPermission, setHasNotifPermission] = useState(
     notificationService.hasNotificationPermission()
   );
+  const [ringerMode, setRingerMode] = useState<'normal' | 'vibrate' | 'silent'>(() =>
+    notificationService.getPhoneRingerMode()
+  );
+  const [isRefreshingRinger, setIsRefreshingRinger] = useState(false);
+  const [isTestingAlert, setIsTestingAlert] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      notificationService.fetchPhoneRingerStatus().then((s) => setRingerMode(s.mode));
+    }
+  }, [isOpen]);
+
+  const handleRefreshRinger = async () => {
+    setIsRefreshingRinger(true);
+    const s = await notificationService.fetchPhoneRingerStatus();
+    setRingerMode(s.mode);
+    setTimeout(() => setIsRefreshingRinger(false), 400);
+  };
+
+  const handleTestPhoneStateAlert = async () => {
+    setIsTestingAlert(true);
+    await notificationService.triggerTestAlert(settings);
+    setTimeout(() => setIsTestingAlert(false), 1500);
+  };
 
   if (!isOpen) return null;
 
@@ -72,7 +100,13 @@ export const SettingsModal: React.FC<Props> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-5"
+      style={{
+        paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 0px) + 0.5rem)',
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0px) + 0.5rem)',
+      }}
+    >
       <div className="w-full max-w-2xl rounded-3xl bg-emerald-950 border border-amber-500/40 shadow-2xl text-slate-100 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-emerald-800/80 flex items-center justify-between">
@@ -155,6 +189,103 @@ export const SettingsModal: React.FC<Props> = ({
                 {isArabic ? 'منح الإذن الآن' : 'Autoriser'}
               </button>
             )}
+          </div>
+
+          {/* Phone State Integration Card (Suivi de l'état du téléphone) */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-900/60 to-emerald-950 border-2 border-amber-400/50 shadow-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-white">
+                    {isArabic ? 'مزامنة حالة الهاتف الفعلي (صوت الأذان)' : 'Synchronisation de l\'état réel du téléphone'}
+                  </h4>
+                  <p className="text-[11px] text-emerald-300/80">
+                    {isArabic
+                      ? 'يتبع صوت الأذان تلقائياً وضع هاتفك: رنين، اهتزاز، أو صامت'
+                      : 'L\'Adhan respecte automatiquement le mode réel : sonnerie, vibreur ou silence'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleRefreshRinger}
+                disabled={isRefreshingRinger}
+                title={isArabic ? 'تحديث فحص حالة الهاتف' : 'Actualiser l\'état'}
+                className="px-2.5 py-1.5 rounded-xl bg-emerald-800/80 hover:bg-emerald-700 text-amber-300 transition cursor-pointer flex items-center gap-1 text-xs border border-emerald-700/60"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${isRefreshingRinger ? 'animate-spin' : ''}`} />
+                <span className="hidden xs:inline">{isArabic ? 'فحص الحالة' : 'Actualiser'}</span>
+              </button>
+            </div>
+
+            {/* Current State Indicator */}
+            <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 flex items-center gap-3">
+              {ringerMode === 'vibrate' ? (
+                <>
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center flex-shrink-0 animate-pulse">
+                    <Vibrate className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-xs font-bold text-amber-300 block">
+                      {isArabic ? '📳 وضع الهاتف: اهتزاز (Vibreur)' : '📳 Mode actuel : Vibreur'}
+                    </span>
+                    <span className="text-[11px] text-emerald-200/90 leading-tight block">
+                      {isArabic
+                        ? 'عند حلول الصلاة: سيهتز هاتفك فقط بدون إصدار أي صوت (احتراماً لوضع الاهتزاز).'
+                        : 'À l\'heure de la prière : le téléphone vibrera sans sonnerie.'}
+                    </span>
+                  </div>
+                </>
+              ) : ringerMode === 'silent' ? (
+                <>
+                  <div className="w-9 h-9 rounded-xl bg-slate-700/50 text-slate-300 flex items-center justify-center flex-shrink-0">
+                    <VolumeX className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-xs font-bold text-slate-200 block">
+                      {isArabic ? '🔕 وضع الهاتف: صامت (Silencieux)' : '🔕 Mode actuel : Silencieux'}
+                    </span>
+                    <span className="text-[11px] text-emerald-300/80 leading-tight block">
+                      {isArabic
+                        ? 'عند حلول الصلاة: الأذان صامت تماماً احتراما لوضع الهاتف الصامت.'
+                        : 'À l\'heure de la prière : l\'Adhan sera totalement silencieux.'}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center flex-shrink-0">
+                    <Volume2 className="w-5 h-5 text-emerald-300" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-xs font-bold text-emerald-300 block">
+                      {isArabic ? '🔔 وضع الهاتف: رنّان (Sonnerie normale)' : '🔔 Mode actuel : Sonnerie normale'}
+                    </span>
+                    <span className="text-[11px] text-emerald-200/90 leading-tight block">
+                      {isArabic
+                        ? 'صوت الأذان يتبع نغمة الهاتف ومسموع حتى لو كان صوت الوسائط (Multimedia) على 0.'
+                        : 'L\'Adhan retentira au volume de sonnerie, même si le son multimédia est à 0.'}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={handleTestPhoneStateAlert}
+              disabled={isTestingAlert}
+              className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-amber-500/20"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>
+                {isArabic
+                  ? 'اختبار صوت الأذان بحسب الوضع الحالي للهاتف'
+                  : 'Tester l\'Adhan selon l\'état actuel du téléphone'}
+              </span>
+            </button>
           </div>
 
           {/* 1. 4 Authentic Adhan Models Selector */}

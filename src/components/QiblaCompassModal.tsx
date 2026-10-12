@@ -76,7 +76,13 @@ export const QiblaCompassModal: React.FC<Props> = ({
   const needleRotation = qiblaAngle - currentAngle;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-5"
+      style={{
+        paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 0px) + 0.5rem)',
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0px) + 0.5rem)',
+      }}
+    >
       <div className="w-full max-w-md rounded-3xl bg-emerald-950 border border-amber-500/40 shadow-2xl text-slate-100 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-emerald-800/80 flex items-center justify-between">

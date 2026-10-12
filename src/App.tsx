@@ -305,7 +305,7 @@ export const App: React.FC = () => {
     <div
       className="min-h-screen bg-islamic-pattern text-slate-100 flex flex-col selection:bg-amber-500 selection:text-emerald-950"
       style={{
-        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), var(--safe-bottom, 12px)) + 5.5rem)',
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0px) + 6rem)',
       }}
     >
       {/* Autoplay unblock floating prompt if audio was blocked by browser policy */}
@@ -313,7 +313,7 @@ export const App: React.FC = () => {
         <div
           className="fixed left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-50 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-emerald-950 font-bold shadow-2xl flex items-center justify-between gap-3 animate-bounce border-2 border-amber-200"
           style={{
-            top: 'calc(max(env(safe-area-inset-top, 0px), var(--safe-top, 0px)) + 3.75rem)',
+            top: 'calc(max(env(safe-area-inset-top, 0px), 0px) + 4.25rem)',
           }}
         >
           <div className="flex items-center gap-2">

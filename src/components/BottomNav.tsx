@@ -32,9 +32,9 @@ export const BottomNav: React.FC<Props> = ({
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-emerald-950/98 backdrop-blur-xl border-t border-emerald-800/80 px-2 pt-2 shadow-2xl transition-all"
+      className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-emerald-950/98 backdrop-blur-xl border-t border-emerald-800/80 px-3 pt-2.5 shadow-2xl transition-all"
       style={{
-        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), var(--safe-bottom, 12px))',
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0px) + 0.75rem)',
       }}
     >
       <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
