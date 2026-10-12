@@ -452,11 +452,14 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Synchronisation Capacitor Android
+      # 8. Synchronisation des fichiers web compilés vers le projet Android Capacitor et sons Adhan
+      - name: Synchronisation Capacitor Android et sons Adhan
         run: |
           if [ ! -d "android" ]; then
             npx @capacitor/cli add android
           fi
+          mkdir -p android/app/src/main/res/raw
+          cp -n public/audio/*.mp3 android/app/src/main/res/raw/ || true
           npx @capacitor/cli sync android
 
       - name: Compilation de l'APK Android

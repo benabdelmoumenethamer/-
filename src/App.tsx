@@ -27,6 +27,7 @@ import {
 } from './types/prayer';
 
 import { Header } from './components/Header';
+import { BottomNav } from './components/BottomNav';
 import { HeroNextPrayer } from './components/HeroNextPrayer';
 import { PrayerTimesList } from './components/PrayerTimesList';
 import { LocationSelectorModal } from './components/LocationSelectorModal';
@@ -108,6 +109,7 @@ export const App: React.FC = () => {
 
   // Audio state
   const [isPlayingAdhan, setIsPlayingAdhan] = useState(false);
+  const [isAudioBlocked, setIsAudioBlocked] = useState(false);
   const [audioVolume, setAudioVolume] = useState(notificationService.getVolume());
   const [currentMuezzin, setCurrentMuezzin] = useState(notificationService.getCurrentMuezzin());
 
@@ -171,6 +173,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const unsubscribe = notificationService.subscribe(() => {
       setIsPlayingAdhan(notificationService.getIsPlaying());
+      setIsAudioBlocked(notificationService.getIsAudioBlocked());
       setCurrentMuezzin(notificationService.getCurrentMuezzin());
       setAudioVolume(notificationService.getVolume());
     });
@@ -276,7 +279,30 @@ export const App: React.FC = () => {
   const isArabic = language === 'ar';
 
   return (
-    <div className="min-h-screen bg-islamic-pattern text-slate-100 flex flex-col selection:bg-amber-500 selection:text-emerald-950 pb-20">
+    <div className="min-h-screen bg-islamic-pattern text-slate-100 flex flex-col selection:bg-amber-500 selection:text-emerald-950 pb-24 sm:pb-12">
+      {/* Autoplay unblock floating prompt if audio was blocked by browser policy */}
+      {isAudioBlocked && (
+        <div className="fixed top-14 left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-50 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-emerald-950 font-bold shadow-2xl flex items-center justify-between gap-3 animate-bounce border-2 border-amber-200">
+          <div className="flex items-center gap-2">
+            <Volume2 className="w-5 h-5 flex-shrink-0" />
+            <span className="text-xs font-black">
+              {isArabic
+                ? 'حان موعد الصلاة! إضغط لتشغيل صوت الأذان فوراً'
+                : "C'est l'heure de la prière ! Touchez pour écouter l'Adhan"}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              notificationService.unlockAudio();
+              notificationService.playMuezzin(settings.selectedMuezzinId);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-emerald-950 text-amber-300 text-xs font-black cursor-pointer shadow flex-shrink-0 hover:bg-emerald-900 transition"
+          >
+            {isArabic ? 'تشغيل' : 'Écouter'}
+          </button>
+        </div>
+      )}
+
       {/* Top sticky header */}
       <Header
         language={language}
@@ -563,6 +589,15 @@ export const App: React.FC = () => {
         onClose={() => setActiveAlert(null)}
         language={language}
         settings={settings}
+      />
+
+      {/* Mobile persistent Bottom Navigation Bar */}
+      <BottomNav
+        language={language}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenCalendar={() => setIsCalendarModalOpen(true)}
+        onOpenQibla={() => setIsQiblaModalOpen(true)}
+        onOpenTasbih={() => setIsTasbihModalOpen(true)}
       />
     </div>
   );

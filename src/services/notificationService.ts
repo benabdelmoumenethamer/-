@@ -22,19 +22,23 @@ type AlertCallback = (data: ActiveAlertData) => void;
 
 class AudioAndNotificationManager {
   private audioElement: HTMLAudioElement | null = null;
+  private audioContext: AudioContext | null = null;
   private currentMuezzin: MuezzinOption | null = null;
   private isPlaying = false;
-  private volume = 0.9;
+  private isAudioBlocked = false;
+  private volume = 1.0;
   private listeners: Set<() => void> = new Set();
   private alertListeners: Set<AlertCallback> = new Set();
   private audioUnlocked = false;
   private channelCreated = false;
+  private nativeListenersAttached = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.initAudioElement();
       this.attachAudioUnlockListeners();
       this.initNativeChannel();
+      this.initNativeListeners();
     }
   }
 
@@ -46,6 +50,7 @@ class AudioAndNotificationManager {
 
     this.audioElement.addEventListener('play', () => {
       this.isPlaying = true;
+      this.isAudioBlocked = false;
       this.notifyListeners();
     });
 
@@ -68,6 +73,7 @@ class AudioAndNotificationManager {
           this.audioElement.play().catch((err) => {
             console.error('Fallback Adhan playback error:', err);
             this.isPlaying = false;
+            this.isAudioBlocked = true;
             this.notifyListeners();
           });
           return;
@@ -79,29 +85,40 @@ class AudioAndNotificationManager {
   }
 
   /**
-   * Unlock Audio Autoplay policy on first user interaction (touch or click)
+   * Unlock Audio Autoplay policy on first user interaction (touch, click, pointer)
    */
   public attachAudioUnlockListeners() {
     if (typeof window === 'undefined') return;
     const unlockHandler = () => {
       this.unlockAudio();
-      window.removeEventListener('click', unlockHandler);
-      window.removeEventListener('touchstart', unlockHandler);
     };
-    window.addEventListener('click', unlockHandler, { once: true });
-    window.addEventListener('touchstart', unlockHandler, { once: true });
+    window.addEventListener('click', unlockHandler, { passive: true });
+    window.addEventListener('touchstart', unlockHandler, { passive: true });
+    window.addEventListener('pointerdown', unlockHandler, { passive: true });
   }
 
   public unlockAudio(): void {
     if (this.audioUnlocked) return;
     try {
       this.initAudioElement();
+
+      // 1. Resume Web Audio API context if suspended
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx && !this.audioContext) {
+        this.audioContext = new AudioCtx();
+      }
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch(() => {});
+      }
+
+      // 2. Play silent micro-buffer on HTMLAudioElement
       if (this.audioElement) {
-        // Silent audio snippet
-        this.audioElement.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
-        this.audioElement.play().then(() => {
-          this.audioElement?.pause();
+        const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==');
+        silentAudio.volume = 0.01;
+        silentAudio.play().then(() => {
           this.audioUnlocked = true;
+          this.isAudioBlocked = false;
+          this.notifyListeners();
         }).catch(() => {
           // Will retry on next interaction
         });
@@ -112,18 +129,25 @@ class AudioAndNotificationManager {
   }
 
   /**
-   * Setup Android Notification Channel with High Importance & Sound
+   * Setup Android Notification Channel with High Importance & Sound in res/raw/
    */
   private async initNativeChannel() {
     if (!Capacitor.isNativePlatform() || this.channelCreated) return;
     try {
+      // Clean up previous channel to ensure sound settings are updated on device
+      try {
+        await LocalNotifications.deleteChannel({ id: 'adhan_prayers_channel' });
+      } catch {
+        // Ignored if didn't exist
+      }
+
       await LocalNotifications.createChannel({
-        id: 'adhan_prayers_channel',
+        id: 'adhan_prayers_channel_v3',
         name: 'آذان – أوقات الصلاة (Adhan)',
         description: 'تنبيهات وأصوات الأذان للصلوات الخمس المفروضة',
         importance: 5, // MAX importance (heads-up notification)
         visibility: 1, // Public
-        sound: 'adhan_algeria.mp3',
+        sound: 'adhan_algeria.mp3', // Located in android/app/src/main/res/raw/adhan_algeria.mp3
         vibration: true,
         lights: true,
         lightColor: '#064E3B',
@@ -131,6 +155,45 @@ class AudioAndNotificationManager {
       this.channelCreated = true;
     } catch (e) {
       console.warn('Could not create Android notification channel:', e);
+    }
+  }
+
+  /**
+   * Listen to native notification taps to start Adhan audio when user opens the app via notification
+   */
+  private initNativeListeners() {
+    if (!Capacitor.isNativePlatform() || this.nativeListenersAttached) return;
+
+    try {
+      LocalNotifications.addListener('localNotificationActionPerformed', (notificationAction) => {
+        const extra = notificationAction.notification.extra;
+        const muezzinId = extra?.muezzinId || 'algeria';
+        const prayerKey = (extra?.prayerKey as PrayerKey) || 'fajr';
+        const titleAr = extra?.prayerTitleAr || 'الصلاة';
+        const titleFr = extra?.prayerTitleFr || 'Prière';
+
+        // Play the Adhan audio immediately upon opening notification!
+        this.playMuezzin(muezzinId);
+
+        // Show active visual prayer alert
+        this.notifyAlertListeners({
+          key: prayerKey,
+          titleAr,
+          titleFr,
+          time: new Date(),
+        });
+      });
+
+      LocalNotifications.addListener('localNotificationReceived', (notification) => {
+        // Notification received while app is active in foreground
+        const extra = notification.extra;
+        const muezzinId = extra?.muezzinId || 'algeria';
+        this.playMuezzin(muezzinId);
+      });
+
+      this.nativeListenersAttached = true;
+    } catch (e) {
+      console.warn('Could not attach native notification listeners:', e);
     }
   }
 
@@ -144,16 +207,20 @@ class AudioAndNotificationManager {
     return () => this.alertListeners.delete(callback);
   }
 
-  private notifyListeners() {
+  public notifyListeners() {
     this.listeners.forEach((l) => l());
   }
 
-  private notifyAlertListeners(data: ActiveAlertData) {
+  public notifyAlertListeners(data: ActiveAlertData) {
     this.alertListeners.forEach((l) => l(data));
   }
 
   public getIsPlaying(): boolean {
     return this.isPlaying;
+  }
+
+  public getIsAudioBlocked(): boolean {
+    return this.isAudioBlocked;
   }
 
   public getCurrentMuezzin(): MuezzinOption | null {
@@ -257,10 +324,12 @@ class AudioAndNotificationManager {
         body: string;
         schedule: { at: Date; allowWhileIdle: boolean };
         channelId: string;
-        smallIcon?: string;
+        sound: string;
+        extra?: Record<string, unknown>;
       }[] = [];
 
       const now = new Date();
+      const soundFile = `adhan_${settings.selectedMuezzinId || 'algeria'}.mp3`;
 
       prayers.forEach((prayer, index) => {
         if (prayer.key === 'sunrise') return;
@@ -284,7 +353,14 @@ class AudioAndNotificationManager {
               at: prayerDate,
               allowWhileIdle: true, // Wakes Android phone from deep sleep
             },
-            channelId: 'adhan_prayers_channel',
+            channelId: 'adhan_prayers_channel_v3',
+            sound: soundFile,
+            extra: {
+              prayerKey: prayer.key,
+              prayerTitleAr: prayer.titleAr,
+              prayerTitleFr: prayer.titleFr,
+              muezzinId: settings.selectedMuezzinId,
+            },
           });
         }
 
@@ -304,7 +380,8 @@ class AudioAndNotificationManager {
                 at: preDate,
                 allowWhileIdle: true,
               },
-              channelId: 'adhan_prayers_channel',
+              channelId: 'adhan_prayers_channel_v3',
+              sound: soundFile,
             });
           }
         }
@@ -312,7 +389,7 @@ class AudioAndNotificationManager {
 
       if (toSchedule.length > 0) {
         await LocalNotifications.schedule({ notifications: toSchedule });
-        console.log(`Scheduled ${toSchedule.length} native Android prayer alarms successfully.`);
+        console.log(`Scheduled ${toSchedule.length} native Android prayer alarms successfully with sound ${soundFile}.`);
       }
     } catch (err) {
       console.warn('Native prayer scheduling error:', err);
@@ -322,11 +399,14 @@ class AudioAndNotificationManager {
   /**
    * Send a system notification (Web / Service Worker / Native)
    */
-  public async sendNotification(title: string, options: NotificationOptions = {}): Promise<void> {
+  public async sendNotification(
+    title: string,
+    options: NotificationOptions & { soundFile?: string } = {}
+  ): Promise<void> {
     // Vibrate device if supported
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
-        navigator.vibrate([400, 200, 400, 200, 800]);
+        navigator.vibrate([500, 250, 500, 250, 1000]);
       } catch {
         // Ignored
       }
@@ -334,6 +414,7 @@ class AudioAndNotificationManager {
 
     if (Capacitor.isNativePlatform()) {
       try {
+        await this.initNativeChannel();
         await LocalNotifications.schedule({
           notifications: [
             {
@@ -341,7 +422,8 @@ class AudioAndNotificationManager {
               title,
               body: (options.body as string) || '',
               schedule: { at: new Date(Date.now() + 100) },
-              channelId: 'adhan_prayers_channel',
+              channelId: 'adhan_prayers_channel_v3',
+              sound: options.soundFile || 'adhan_algeria.mp3',
             },
           ],
         });
@@ -373,7 +455,7 @@ class AudioAndNotificationManager {
   }
 
   /**
-   * Plays authentic Muezzin recitation
+   * Plays authentic Muezzin recitation with multiple fallbacks
    */
   public async playMuezzin(muezzinId: string): Promise<void> {
     const muezzin = MUEZZIN_OPTIONS.find((m) => m.id === muezzinId) || MUEZZIN_OPTIONS[0];
@@ -382,28 +464,47 @@ class AudioAndNotificationManager {
     this.stopAudio();
     this.initAudioElement();
 
-    if (this.audioElement) {
-      try {
-        this.audioElement.src = muezzin.audioUrl;
-        this.audioElement.currentTime = 0;
-        await this.audioElement.play();
-        this.isPlaying = true;
+    if (!this.audioElement) return;
+
+    // Resolve URL safely (works across Web, PWA, and Capacitor WebView)
+    const targetUrl = typeof window !== 'undefined'
+      ? new URL(muezzin.audioUrl, window.location.href).href
+      : muezzin.audioUrl;
+
+    try {
+      this.audioElement.src = targetUrl;
+      this.audioElement.currentTime = 0;
+      await this.audioElement.play();
+      this.isPlaying = true;
+      this.isAudioBlocked = false;
+      this.notifyListeners();
+    } catch (err: unknown) {
+      console.warn('Primary audio playback error:', err);
+
+      // Check if blocked by browser autoplay policy
+      const errorMsg = String(err);
+      if (errorMsg.includes('NotAllowedError') || errorMsg.includes('interact')) {
+        this.isAudioBlocked = true;
+        this.isPlaying = false;
         this.notifyListeners();
-      } catch (err) {
-        console.warn('Local audio error, trying backup CDN:', err);
-        const fallbackUrl = FALLBACK_CDN_URLS[muezzin.id];
-        if (fallbackUrl && this.audioElement) {
-          try {
-            this.audioElement.src = fallbackUrl;
-            this.audioElement.currentTime = 0;
-            await this.audioElement.play();
-            this.isPlaying = true;
-            this.notifyListeners();
-          } catch (e2) {
-            console.error('All audio sources blocked by browser policy:', e2);
-            this.isPlaying = false;
-            this.notifyListeners();
-          }
+        return;
+      }
+
+      // Try CDN fallback
+      const fallbackUrl = FALLBACK_CDN_URLS[muezzin.id];
+      if (fallbackUrl && this.audioElement) {
+        try {
+          this.audioElement.src = fallbackUrl;
+          this.audioElement.currentTime = 0;
+          await this.audioElement.play();
+          this.isPlaying = true;
+          this.isAudioBlocked = false;
+          this.notifyListeners();
+        } catch (e2: unknown) {
+          console.error('All audio sources blocked by browser policy:', e2);
+          this.isPlaying = false;
+          this.isAudioBlocked = true;
+          this.notifyListeners();
         }
       }
     }
@@ -415,11 +516,12 @@ class AudioAndNotificationManager {
       this.audioElement.currentTime = 0;
     }
     this.isPlaying = false;
+    this.isAudioBlocked = false;
     this.notifyListeners();
   }
 
   /**
-   * Get / store triggered history in localStorage to avoid missed or duplicate alerts
+   * Get / store triggered history in localStorage to avoid duplicate alerts
    */
   private isAlreadyTriggered(key: string): boolean {
     if (typeof window === 'undefined') return false;
@@ -439,8 +541,7 @@ class AudioAndNotificationManager {
       const list: string[] = raw ? JSON.parse(raw) : [];
       if (!list.includes(key)) {
         list.push(key);
-        // Keep only last 20 entries
-        if (list.length > 20) list.shift();
+        if (list.length > 25) list.shift();
         localStorage.setItem('adhan_triggered_cache', JSON.stringify(list));
       }
     } catch {
@@ -450,7 +551,6 @@ class AudioAndNotificationManager {
 
   /**
    * Main prayer monitor called every second by App.tsx
-   * Uses a generous window (-10s to +180s) to guarantee triggers even if tab sleeps or lags
    */
   public checkAndTriggerPrayerAlert(
     prayerKey: PrayerKey,
@@ -470,6 +570,7 @@ class AudioAndNotificationManager {
 
     const isArabic = settings.language === 'ar';
     const prayerTitle = isArabic ? prayerNameAr : prayerNameFr;
+    const soundFile = `adhan_${settings.selectedMuezzinId || 'algeria'}.mp3`;
 
     // 1. Exact prayer time trigger (Window: 5 seconds before to 3 minutes after)
     const exactKey = `exact_${prayerKey}_${dateStr}`;
@@ -483,8 +584,12 @@ class AudioAndNotificationManager {
         ? `حي على الصلاة، حي على الفلاح (الله أكبر)`
         : `Accourez à la prière, accourez au succès`;
 
-      // Trigger system notification
-      this.sendNotification(notifTitle, { body: notifBody, tag: exactKey });
+      // Trigger system notification with custom sound
+      this.sendNotification(notifTitle, {
+        body: notifBody,
+        tag: exactKey,
+        soundFile,
+      });
 
       // Trigger active in-app visual alert overlay
       this.notifyAlertListeners({
@@ -504,7 +609,6 @@ class AudioAndNotificationManager {
     if (settings.preNotificationMinutes > 0) {
       const preKey = `pre_${prayerKey}_${dateStr}_${settings.preNotificationMinutes}`;
       const targetPreMs = settings.preNotificationMinutes * 60000;
-      // Window: within 60 seconds around the pre-notification time
       if (
         diffMs <= targetPreMs + 10000 &&
         diffMs >= targetPreMs - 50000 &&
@@ -538,19 +642,20 @@ class AudioAndNotificationManager {
     const notifBody = isArabic
       ? 'تم تفعيل التنبيه الصوتي والإشعار بنجاح لجميع الصلوات'
       : 'Les notifications et la récitation audio sont bien configurées';
+    const soundFile = `adhan_${settings.selectedMuezzinId || 'algeria'}.mp3`;
 
-    await this.sendNotification(notifTitle, { body: notifBody });
+    await this.sendNotification(notifTitle, { body: notifBody, soundFile });
 
     // In-app alert
     this.notifyAlertListeners({
       key: 'fajr',
-      titleAr: 'اختبار الأذان (تجريبي)',
-      titleFr: 'Test d\'alerte Adhan',
+      titleAr: isArabic ? 'اختبار الأذان (تجريبي)' : "Test d'alerte Adhan",
+      titleFr: "Test d'alerte Adhan",
       time: new Date(),
       isTest: true,
     });
 
-    // Play sound
+    // Play sound immediately
     await this.playMuezzin(settings.selectedMuezzinId);
 
     return hasPerm;

@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Volume2,
   VolumeX,
   X,
   BellRing,
   BookOpen,
-  Sparkles,
   CheckCircle2,
-  Share2,
 } from 'lucide-react';
 import { ActiveAlertData, notificationService } from '../services/notificationService';
 import { Language, PrayerSettings } from '../types/prayer';
@@ -26,12 +24,20 @@ export const ActivePrayerAlertModal: React.FC<Props> = ({
   settings,
 }) => {
   const [showDuaa, setShowDuaa] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(() => notificationService.getIsPlaying());
   const isArabic = language === 'ar';
+
+  useEffect(() => {
+    setIsPlaying(notificationService.getIsPlaying());
+    const unsubscribe = notificationService.subscribe(() => {
+      setIsPlaying(notificationService.getIsPlaying());
+    });
+    return unsubscribe;
+  }, [alertData]);
 
   if (!alertData) return null;
 
   const prayerName = isArabic ? alertData.titleAr : alertData.titleFr;
-  const isPlaying = notificationService.getIsPlaying();
 
   const handleStopAudio = () => {
     notificationService.stopAudio();
@@ -41,6 +47,7 @@ export const ActivePrayerAlertModal: React.FC<Props> = ({
     if (isPlaying) {
       notificationService.stopAudio();
     } else {
+      notificationService.unlockAudio();
       notificationService.playMuezzin(settings.selectedMuezzinId);
     }
   };
@@ -52,9 +59,9 @@ export const ActivePrayerAlertModal: React.FC<Props> = ({
         <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-24 bg-amber-500/20 rounded-full blur-2xl pointer-events-none" />
 
         {/* Header */}
-        <div className="p-5 border-b border-emerald-800/80 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-emerald-800/80 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-400/40 flex items-center justify-center animate-bounce">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-400/40 flex items-center justify-center animate-bounce flex-shrink-0">
               <BellRing className="w-5 h-5 text-amber-400" />
             </div>
             <div>
@@ -81,11 +88,11 @@ export const ActivePrayerAlertModal: React.FC<Props> = ({
         </div>
 
         {/* Main Body */}
-        <div className="p-5 flex flex-col items-center text-center space-y-5">
+        <div className="p-4 sm:p-5 flex flex-col items-center text-center space-y-4">
           {/* Mosque sound animation */}
-          <div className="relative flex items-center justify-center my-2">
-            <div className="w-24 h-24 rounded-full bg-emerald-800/60 border border-amber-400/30 flex items-center justify-center shadow-inner">
-              <span className="text-4xl">🕌</span>
+          <div className="relative flex items-center justify-center my-1">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-emerald-800/60 border border-amber-400/30 flex items-center justify-center shadow-inner">
+              <span className="text-3xl sm:text-4xl">🕌</span>
             </div>
             {isPlaying && (
               <>
@@ -101,10 +108,10 @@ export const ActivePrayerAlertModal: React.FC<Props> = ({
                 ? 'حي على الصلاة • حي على الفلاح • الصلاة خير من النوم'
                 : 'Accourez à la prière • Accourez au succès'}
             </p>
-            <p className="text-xs text-amber-300/80 mt-1">
+            <p className="text-xs text-amber-300/90 mt-1 font-semibold">
               {isPlaying
-                ? isArabic ? 'صوت الأذان يرتفع الآن...' : 'Récitation de l\'Adhan en cours...'
-                : isArabic ? 'تم إيقاف الصوت' : 'Audio en pause'}
+                ? isArabic ? '🔊 صوت الأذان يرتفع الآن...' : '🔊 Récitation de l\'Adhan en cours...'
+                : isArabic ? '⚠️ اضغط على زر تشغيل الصوت بالأسفل لسماع الأذان' : '⚠️ Appuyez sur le bouton ci-dessous pour démarrer le son'}
             </p>
           </div>
 
@@ -115,14 +122,14 @@ export const ActivePrayerAlertModal: React.FC<Props> = ({
               className={`flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-bold text-sm transition cursor-pointer ${
                 isPlaying
                   ? 'bg-emerald-900/80 hover:bg-emerald-800 border border-emerald-700 text-amber-300'
-                  : 'bg-amber-500 hover:bg-amber-400 text-emerald-950 shadow-lg shadow-amber-500/20'
+                  : 'bg-amber-500 hover:bg-amber-400 text-emerald-950 shadow-lg shadow-amber-500/30 animate-pulse ring-2 ring-amber-300'
               }`}
             >
               {isPlaying ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               <span>
                 {isPlaying
                   ? isArabic ? 'إيقاف الصوت' : 'Couper le son'
-                  : isArabic ? 'تشغيل الأذان' : 'Jouer l\'Adhan'}
+                  : isArabic ? '▶️ تشغيل الأذان' : '▶️ Jouer l\'Adhan'}
               </span>
             </button>
 
@@ -139,7 +146,7 @@ export const ActivePrayerAlertModal: React.FC<Props> = ({
           </div>
 
           {/* Duaa after Adhan Accordion */}
-          <div className="w-full bg-emerald-900/50 rounded-2xl border border-emerald-800 p-4 text-start">
+          <div className="w-full bg-emerald-900/50 rounded-2xl border border-emerald-800 p-3.5 text-start">
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-emerald-800/80 text-xs text-amber-400 font-bold">
               <span className="flex items-center gap-1.5">
                 <BookOpen className="w-4 h-4" />

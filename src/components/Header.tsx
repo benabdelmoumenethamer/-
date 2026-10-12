@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Settings,
   Sparkles,
-  Volume2,
   Code2,
   VolumeX,
 } from 'lucide-react';
@@ -61,82 +60,89 @@ export const Header: React.FC<Props> = ({
   });
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-emerald-950/90 backdrop-blur-md border-b border-emerald-800/50 transition-all">
-      <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+    <header className="sticky top-0 z-40 w-full bg-emerald-950/95 backdrop-blur-md border-b border-emerald-800/60 transition-all shadow-md">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2">
         {/* Brand & App Title */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/25 border border-amber-300/40 flex-shrink-0">
-            <span className="text-emerald-950 font-black text-xl font-quran select-none">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/25 border border-amber-300/40 flex-shrink-0">
+            <span className="text-emerald-950 font-black text-base sm:text-xl font-quran select-none">
               أذان
             </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-sm sm:text-lg font-black tracking-tight text-white truncate">
                 <span>{isArabic ? 'آذان – أوقات الصلاة' : 'Adhan – Prières'}</span>
               </h1>
-              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30">
+              <span className="hidden md:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30 flex-shrink-0">
                 {isArabic ? 'الجزائر والعالم' : 'Algérie & Monde'}
               </span>
             </div>
             {/* Hijri & Gregorian Dates */}
-            <div className="flex items-center gap-2 text-xs text-emerald-200/80">
-              <span className="font-semibold text-amber-300/90 font-quran text-sm">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-emerald-200/80 truncate">
+              <span className="font-semibold text-amber-300/90 font-quran text-xs sm:text-sm truncate">
                 {isArabic ? hijriDate.formattedAr : hijriDate.formattedFr}
               </span>
-              <span className="text-emerald-500">·</span>
-              <span className="hidden md:inline">{gregorianDateString}</span>
-              <span className="hidden md:inline text-emerald-500">·</span>
-              <span className="font-mono font-medium text-emerald-100">{timeString}</span>
+              <span className="text-emerald-500 hidden xs:inline">·</span>
+              <span className="hidden lg:inline">{gregorianDateString}</span>
+              <span className="hidden lg:inline text-emerald-500">·</span>
+              <span className="font-mono font-medium text-emerald-100 hidden xs:inline">{timeString}</span>
             </div>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Action Controls - Guaranteed responsive layout with NO overflow on mobile portrait */}
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
           {/* Adhan active indicator / stop button */}
           {isPlayingAdhan && (
             <button
               onClick={onStopAdhan}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-bold text-xs animate-pulse cursor-pointer shadow-md shadow-amber-500/30"
-              title={isArabic ? 'إيقاف الأذان' : 'Arrêter l\'Adhan'}
+              className="flex items-center gap-1 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-bold text-xs animate-pulse cursor-pointer shadow-md shadow-amber-500/30 flex-shrink-0"
+              title={isArabic ? 'إيقاف الأذان' : "Arrêter l'Adhan"}
             >
               <VolumeX className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">{isArabic ? 'إيقاف' : 'Stop'}</span>
+              <span className="text-[11px] font-bold">{isArabic ? 'إيقاف' : 'Stop'}</span>
             </button>
           )}
 
-          {/* Qibla button */}
+          {/* Desktop/Tablet Quick Buttons (Hidden on mobile portrait to avoid crowding) */}
           <button
             onClick={onOpenQibla}
-            className="p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 transition cursor-pointer"
+            className="hidden md:flex p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 transition cursor-pointer"
             title={isArabic ? 'بوصلة القبلة' : 'Boussole Qibla'}
           >
             <Compass className="w-4 h-4" />
           </button>
 
-          {/* Tasbih button */}
           <button
             onClick={onOpenTasbih}
-            className="p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 transition cursor-pointer"
+            className="hidden md:flex p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 transition cursor-pointer"
             title={isArabic ? 'المسبحة الإلكترونية والأذكار' : 'Tasbih & Évocations'}
           >
             <Sparkles className="w-4 h-4" />
           </button>
 
-          {/* Calendar button */}
           <button
             onClick={onOpenCalendar}
-            className="p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 transition cursor-pointer"
+            className="hidden md:flex p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 transition cursor-pointer"
             title={isArabic ? 'جدول مواقيت الصلاة الشهري' : 'Calendrier mensuel'}
           >
             <CalendarDays className="w-4 h-4" />
           </button>
 
-          {/* Silent mode toggle */}
+          <button
+            onClick={onOpenFlutterGuide}
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-amber-200 border border-amber-500/30 text-xs font-semibold transition cursor-pointer"
+            title={isArabic ? 'كود تطبيق Flutter وملف APK' : 'Code Flutter & APK Android'}
+          >
+            <Code2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isArabic ? 'APK' : 'APK'}</span>
+          </button>
+
+          {/* Silent mode toggle - Always visible */}
           <button
             onClick={onToggleSilentMode}
-            className={`p-2 rounded-xl border transition cursor-pointer ${
+            className={`p-2 rounded-xl border transition cursor-pointer flex-shrink-0 ${
               silentMode
                 ? 'bg-rose-950/70 border-rose-600/60 text-rose-300 hover:bg-rose-900/80'
                 : 'bg-emerald-900/60 border-emerald-700/60 text-emerald-300 hover:bg-emerald-800'
@@ -154,35 +160,28 @@ export const Header: React.FC<Props> = ({
             {silentMode ? <BellOff className="w-4 h-4 text-rose-400" /> : <Bell className="w-4 h-4" />}
           </button>
 
-          {/* Flutter APK code guide */}
-          <button
-            onClick={onOpenFlutterGuide}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-amber-200 border border-amber-500/30 text-xs font-semibold transition cursor-pointer"
-            title={isArabic ? 'كود تطبيق Flutter وملف APK' : 'Code Flutter & APK Android'}
-          >
-            <Code2 className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isArabic ? 'ملف APK' : 'APK'}</span>
-          </button>
-
-          {/* Language Switcher */}
+          {/* Language Switcher - Always visible */}
           <button
             onClick={() => onLanguageChange(isArabic ? 'fr' : 'ar')}
-            className="px-2.5 py-1.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 text-xs font-bold transition cursor-pointer"
+            className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 text-xs font-bold transition cursor-pointer flex-shrink-0"
             title={isArabic ? 'Changer en Français' : 'التحويل إلى العربية'}
           >
             {isArabic ? 'FR' : 'عربي'}
           </button>
 
-          {/* PWA Install */}
-          <PWAInstallButton language={language} />
+          {/* PWA Install - Desktop only in header to keep mobile clean */}
+          <div className="hidden sm:block">
+            <PWAInstallButton language={language} />
+          </div>
 
-          {/* Settings button */}
+          {/* Settings button - PRIORITY #1: ALWAYS VISIBLE ON ALL SCREENS */}
           <button
             onClick={onOpenSettings}
-            className="p-2 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-amber-300 border border-emerald-700/60 transition cursor-pointer"
+            className="p-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-emerald-900/90 hover:from-amber-500/30 hover:to-emerald-800 text-amber-300 border border-amber-400/50 hover:border-amber-300 transition cursor-pointer flex-shrink-0 shadow-md shadow-amber-500/10 flex items-center justify-center group"
             title={isArabic ? 'الإعدادات' : 'Paramètres'}
+            aria-label="Paramètres"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
           </button>
         </div>
       </div>
